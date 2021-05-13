@@ -134,6 +134,55 @@ LPOPER WINAPI xll_range_fold(const LPOPER pm, const LPOPER pr)
 	return &o;
 }
 
+AddIn xai_range_scan(
+	Function(XLL_LPOPER, "xll_range_scan", "RANGE.SCAN")
+	.Arguments({
+		Arg(XLL_LPOPER, "monoid", "is the monoid used to scan."),
+		Arg(XLL_LPOPER, "range", "is a range or a handle to a range to be scanned."),
+		})
+		.Category(CATEGORY)
+	.FunctionHelp("Return the right scan of range using monoid.")
+	.Documentation(R"(
+Accumulate elements of <code>range</code> using <code>monoid</code>.
+If <code>range</code> has more than one row and more than one column
+then return scan applied to each column.
+)")
+);
+LPOPER WINAPI xll_range_scan(const LPOPER pm, const LPOPER pr)
+{
+#pragma XLLEXPORT
+	static OPER o;
+
+	try {
+		LPOPER pr_ = ptr(pr);
+
+		OPER r0 = Excel(xlUDF, *pm, item(*pr_, 0));
+		unsigned n = pr_->size() / r0.size();
+		o.resize(n, r0.size());
+		for (unsigned i = 0; i < n; ++i) {
+			r0 = Excel(xlUDF, *pm, r0, item(*pr_, i));
+			for (unsigned j = 0; j < r0.size(); ++j) {
+				o(i, j) = r0[j];
+			}
+		}
+		if (pr_->rows() == 1) {
+			o.resize(1, o.size());
+		}
+
+		if (pr_ != pr) {
+			*pr_ = o; // assign to handle value
+			o = *pr; // return handle
+		}
+	}
+	catch (const std::exception& ex) {
+		XLL_ERROR(ex.what());
+
+		o = ErrNA;
+	}
+
+	return &o;
+}
+
 AddIn xai_range_max(
 	Function(XLL_LPOPER, "xll_range_max", "RANGE.MAX")
 	.Arguments({
@@ -162,6 +211,67 @@ LPOPER WINAPI xll_range_max(const LPOPER pr, const LPOPER p_r)
 		for (unsigned i = 0; i < size(*pr); ++i) {
 			r[i] = std::max(r[i].as_num(), (*p_r)[i].as_num());
 		}
+	}
+
+	return &r;
+}
+
+AddIn xai_range_sum(
+	Function(XLL_LPOPER, "xll_range_sum", "RANGE.SUM")
+	.Arguments({
+		Arg(XLL_LPOPER, "range", "is a range."),
+		Arg(XLL_LPOPER, "_range", "is an optional second range."),
+		})
+	.FunctionHelp("Sum of ranges.")
+	.Category(CATEGORY)
+	.Documentation(R"(
+Sum or concatenate monoid for ranges.
+)")
+);
+LPOPER WINAPI xll_range_sum(const LPOPER pr, const LPOPER p_r)
+{
+#pragma XLLEXPORT
+	static OPER r;
+
+	try {
+		if (p_r->is_missing()) {
+			r.resize(rows(*pr), columns(*pr));
+			for (unsigned i = 0; i < size(*pr); ++i) {
+				switch ((*pr)[i].type()) {
+				case xltypeNum:
+					r[i] = 0;
+					break;
+				case xltypeStr:
+				case xltypeNil:
+					r[i] = "";
+					break;
+				case xltypeBool:
+					r[i] = false;
+					break;
+				default:
+					r[i] = 0;
+				}
+			}
+		}
+		else {
+			r = *pr;
+			for (unsigned i = 0; i < size(*pr); ++i) {
+				if (r[i].is_num()) {
+					r[i] = r[i].as_num() + (*p_r)[i].as_num();
+				}
+				else if (r[i].is_bool()) {
+					r[i] = Excel(xlfOr, r[i], (*p_r)[i]);
+				}
+				else {
+					r[i] = Excel(xlfConcatenate, r[i], (*p_r)[i]);
+				}
+			}
+		}
+	}
+	catch (const std::exception& ex) {
+		XLL_ERROR(ex.what());
+
+		r = ErrNA;
 	}
 
 	return &r;
