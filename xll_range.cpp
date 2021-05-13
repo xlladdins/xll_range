@@ -21,27 +21,22 @@ inline LPOPER ptr(LPOPER po)
 }
 
 // i-th item or row
-inline const XLOPERX item(const OPER& o, unsigned i)
+inline XLOPERX item(XLOPERX x, unsigned i)
 {
-	XLOPERX x;
+	if (x.xltype & xltypeMulti) {
+		if (rows(x) == 1) {
+			std::swap(x.val.array.rows, x.val.array.columns);
+		}
+		unsigned r = rows(x);
+		unsigned c = columns(x);
 
-	if (o.type() != xltypeMulti) {
-		ensure(i == 0);
-		x.xltype = o.xltype;
-		x.val = o.val;
-	}
-	else {
-		x.xltype = xltypeMulti;
-		x.val.array.rows = 1;
-
-		if (o.rows() > 1 and o.columns() > 1) {
-			x.val.array.columns = o.columns();
-			x.val.array.lparray = o.val.array.lparray + i * o.columns();
+		if (r > 1 and c > 1) {
+			x.val.array.lparray = x.val.array.lparray + xmod(i, r) * c;
 		}
 		else {
-			x.val.array.columns = 1;
-			x.val.array.lparray = o.val.array.lparray + i;
+			x.val.array.lparray = x.val.array.lparray + xmod(i, r*c);
 		}
+		x.val.array.rows = 1;
 	}
 
 	return x;
@@ -95,8 +90,8 @@ LPOPER WINAPI xll_range_get(HANDLEX h)
 AddIn xai_range_fold(
 	Function(XLL_LPOPER, "xll_range_fold", "RANGE.FOLD")
 	.Arguments({
-		Arg(XLL_LPOPER, "monoid", "is the monoid used to fold."),
-		Arg(XLL_LPOPER, "range", "is a range or a handle to a range to be folded."),
+		Arg(XLL_DOUBLE, "monoid", "is the monoid used to fold."),
+		Arg(XLL_LPOPER, "range", "is a range to be folded."),
 		})
 		.Category(CATEGORY)
 	.FunctionHelp("Return the right fold of range using monoid.")
@@ -106,38 +101,36 @@ If <code>range</code> has more than one row and more than one column
 then return one row range of fold applied to each column.
 )")
 );
-LPOPER WINAPI xll_range_fold(const LPOPER pm, const LPOPER pr)
+const XLOPERX* WINAPI xll_range_fold(double m, XLOPERX* pr)
 {
 #pragma XLLEXPORT
-	static OPER o;
 
 	try {
-		LPOPER pr_ = ptr(pr);
-
-		o = Excel(xlUDF, *pm, item(*pr_, 0));
-		unsigned n = pr_->size() / o.size();
-		for (unsigned i = 0; i < n; ++i) {
-			o = Excel(xlUDF, *pm, o, item(*pr_, i));
+		OPER M(m);
+		// row to column
+		if (rows(*pr) == 1) {
+			std::swap(pr->val.array.rows, pr->val.array.columns);
 		}
-
-		if (pr_ != pr) {
-			*pr_ = o; // assign to handle value
-			o = *pr; // return handle
+		XLOPERX r0 = item(*pr, 0);
+		for (unsigned i = 1; i < rows(*pr); ++i) {
+			OPER ri = Excel(xlUDF, M, r0, item(*pr, i));
+			std::copy(ri.begin(), ri.end(), begin(r0));
 		}
+		pr->val.array.rows = 1;
 	}
 	catch (const std::exception& ex) {
 		XLL_ERROR(ex.what());
 
-		o = ErrNA;
+		return &ErrNA;
 	}
 
-	return &o;
+	return pr;
 }
 
 AddIn xai_range_scan(
 	Function(XLL_LPOPER, "xll_range_scan", "RANGE.SCAN")
 	.Arguments({
-		Arg(XLL_LPOPER, "monoid", "is the monoid used to scan."),
+		Arg(XLL_DOUBLE, "monoid", "is the monoid used to scan."),
 		Arg(XLL_LPOPER, "range", "is a range or a handle to a range to be scanned."),
 		})
 		.Category(CATEGORY)
@@ -148,39 +141,32 @@ If <code>range</code> has more than one row and more than one column
 then return scan applied to each column.
 )")
 );
-LPOPER WINAPI xll_range_scan(const LPOPER pm, const LPOPER pr)
+const XLOPERX* WINAPI xll_range_scan(double m, XLOPERX* pr)
 {
 #pragma XLLEXPORT
-	static OPER o;
-
 	try {
-		LPOPER pr_ = ptr(pr);
-
-		OPER r0 = Excel(xlUDF, *pm, item(*pr_, 0));
-		unsigned n = pr_->size() / r0.size();
-		o.resize(n, r0.size());
-		for (unsigned i = 0; i < n; ++i) {
-			r0 = Excel(xlUDF, *pm, r0, item(*pr_, i));
-			for (unsigned j = 0; j < r0.size(); ++j) {
-				o(i, j) = r0[j];
-			}
+		OPER M(m);
+		// row to column
+		if (rows(*pr) == 1) {
+			std::swap(pr->val.array.rows, pr->val.array.columns);
 		}
-		if (pr_->rows() == 1) {
-			o.resize(1, o.size());
+		XLOPERX r0 = item(*pr, 0);
+		for (unsigned i = 1; i < rows(*pr); ++i) {
+			XLOPERX ri = item(*pr, i);
+			ri = Excel(xlUDF, M, r0, ri);
+			r0 = ri;
 		}
-
-		if (pr_ != pr) {
-			*pr_ = o; // assign to handle value
-			o = *pr; // return handle
+		if (columns(*pr) == 1) {
+			std::swap(pr->val.array.rows, pr->val.array.columns);
 		}
 	}
 	catch (const std::exception& ex) {
 		XLL_ERROR(ex.what());
 
-		o = ErrNA;
+		return &ErrNA;
 	}
 
-	return &o;
+	return pr;
 }
 
 AddIn xai_range_max(
