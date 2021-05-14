@@ -101,9 +101,10 @@ If <code>range</code> has more than one row and more than one column
 then return one row range of fold applied to each column.
 )")
 );
-const XLOPERX* WINAPI xll_range_fold(double m, XLOPERX* pr)
+LPOPER WINAPI xll_range_fold(double m, LPOPER pr)
 {
 #pragma XLLEXPORT
+	static OPER o;
 
 	try {
 		OPER M(m);
@@ -111,20 +112,18 @@ const XLOPERX* WINAPI xll_range_fold(double m, XLOPERX* pr)
 		if (rows(*pr) == 1) {
 			std::swap(pr->val.array.rows, pr->val.array.columns);
 		}
-		XLOPERX r0 = item(*pr, 0);
+		o = item(*pr, 0);
 		for (unsigned i = 1; i < rows(*pr); ++i) {
-			OPER ri = Excel(xlUDF, M, r0, item(*pr, i));
-			std::copy(ri.begin(), ri.end(), begin(r0));
+			o = Excel(xlUDF, M, o, item(*pr, i));
 		}
-		pr->val.array.rows = 1;
 	}
 	catch (const std::exception& ex) {
 		XLL_ERROR(ex.what());
 
-		return &ErrNA;
+		o = ErrNA;
 	}
 
-	return pr;
+	return &o;
 }
 
 AddIn xai_range_scan(
@@ -141,32 +140,33 @@ If <code>range</code> has more than one row and more than one column
 then return scan applied to each column.
 )")
 );
-const XLOPERX* WINAPI xll_range_scan(double m, XLOPERX* pr)
+LPOPER WINAPI xll_range_scan(double m, LPOPER pr)
 {
 #pragma XLLEXPORT
+	static OPER o;
 	try {
 		OPER M(m);
 		// row to column
 		if (rows(*pr) == 1) {
 			std::swap(pr->val.array.rows, pr->val.array.columns);
 		}
-		XLOPERX r0 = item(*pr, 0);
+		o = item(*pr, 0);
+		XLOPERX o0 = item(o, 0);
 		for (unsigned i = 1; i < rows(*pr); ++i) {
-			XLOPERX ri = item(*pr, i);
-			ri = Excel(xlUDF, M, r0, ri);
-			r0 = ri;
+			o0 = Excel(xlUDF, M, o0, item(*pr, i));
+			o.push_back(o0);
 		}
 		if (columns(*pr) == 1) {
-			std::swap(pr->val.array.rows, pr->val.array.columns);
+			o.resize(1, o.size());
 		}
 	}
 	catch (const std::exception& ex) {
 		XLL_ERROR(ex.what());
 
-		return &ErrNA;
+		o = ErrNA;
 	}
 
-	return pr;
+	return &o;
 }
 
 AddIn xai_range_max(
