@@ -21,28 +21,31 @@ inline LPOPER ptr(LPOPER po)
 	return po;
 }
 
+// size of row or column, or number of rows of 2-d range
 inline unsigned items(const XLOPERX& x)
 {
-	return rows(x) == 1 ? columns(x) : rows(x);
+	return rows(x) > 1 ? rows(x) : columns(x);
 }
 inline unsigned item_index(const XLOPERX& x, unsigned i)
 {
-	return rows(x) == 1 ? i : i * columns(x);
+	return xmod(i * (rows(x) > 1 ? columns(x) : 1), size(x));
 }
 // i-th element or i-th row
 inline XLOPERX item(XLOPERX x, unsigned i)
 {
 	if (x.xltype & xltypeMulti) {
-		if (rows(x) == 1) {
-			std::swap(x.val.array.rows, x.val.array.columns);
+		x.val.array.lparray = &index(x, item_index(x, i));
+		if (rows(x) > 1) {
+			x.val.array.rows = 1;
 		}
-
-		x.val.array.lparray = &index(x, i, 0);
-		x.val.array.rows = 1;
+		else {
+			x.val.array.columns = 1;
+		}
 	}
 
 	return x;
 }
+
 #ifdef _DEBUG
 int test_item()
 {
@@ -302,6 +305,57 @@ LPOPER WINAPI xll_range_sum(const LPOPER pr, const LPOPER p_r)
 	}
 
 	return &r;
+}
+
+inline XLOPERX range_take(XLOPERX x, long i)
+{
+	if (i > 0) {
+		unsigned n = i;
+		if (rows(x) > 1 and n <= rows(x)) {
+			x.val.array.rows = n;
+		}
+		else if (n <= columns(x)) {
+			x.val.array.columns = n;
+		}
+	}
+	else if (i < 0) {
+		unsigned n = -i;
+		if (rows(x) > 1 and n <= rows(x)) {
+			x.val.array.lparray = end(x) - n * columns(x);
+			x.val.array.rows = n;
+		}
+		else if (n <= columns(x)) {
+			x.val.array.lparray = end(x) - n;
+			x.val.array.columns = n;
+		}
+	}
+	else {
+		x.val.array.rows = 0;
+		x.val.array.columns = 0;
+	}
+
+	return x;
+}
+AddIn xai_range_take(
+	Function(XLL_LPOPER, "xll_range_take", "RANGE.TAKE")
+	.Arguments({
+		Arg(XLL_LONG, "count", "is the number of items to take."),
+		Arg(XLL_LPOPER, "range", "is the range to take items from.")
+		})
+	.FunctionHelp("Take count items for beginning (count > 0) or end (count < 0) of range.")
+	.Category(CATEGORY)
+	.Documentation(R"xyzyx(
+Take <code>count</code> items from <code>range</code>.
+)xyzyx")
+);
+LPOPER WINAPI xll_range_take(LONG n, const LPOPER pr)
+{
+#pragma XLLEXPORT
+	static OPER o;
+
+	o = range_take(*pr, n);
+
+	return &o;
 }
 
 #if 0
