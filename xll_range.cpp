@@ -1,4 +1,5 @@
 // xll_range.cpp - two-dimensional range of cells
+// ??? Can range.scan(monoid, range.get(h)) act on underlying handle ???
 #include "xll/xll/xll.h"
 
 #ifndef CATEGORY
@@ -20,27 +21,89 @@ inline LPOPER ptr(LPOPER po)
 	return po;
 }
 
-// i-th item or row
+inline unsigned items(const XLOPERX& x)
+{
+	return rows(x) == 1 ? columns(x) : rows(x);
+}
+inline unsigned item_index(const XLOPERX& x, unsigned i)
+{
+	return rows(x) == 1 ? i : i * columns(x);
+}
+// i-th element or i-th row
 inline XLOPERX item(XLOPERX x, unsigned i)
 {
 	if (x.xltype & xltypeMulti) {
 		if (rows(x) == 1) {
 			std::swap(x.val.array.rows, x.val.array.columns);
 		}
-		unsigned r = rows(x);
-		unsigned c = columns(x);
 
-		if (r > 1 and c > 1) {
-			x.val.array.lparray = x.val.array.lparray + xmod(i, r) * c;
-		}
-		else {
-			x.val.array.lparray = x.val.array.lparray + xmod(i, r*c);
-		}
+		x.val.array.lparray = &index(x, i, 0);
 		x.val.array.rows = 1;
 	}
 
 	return x;
 }
+#ifdef _DEBUG
+int test_item()
+{
+	OPER o({ OPER(1), OPER(2), OPER(3), OPER(4) });
+	XLOPERX x;
+	try {
+		o.resize(o.size(), 1);
+		x = item(o, 0);
+		ensure(x.xltype == xltypeMulti);
+		ensure(x.val.array.rows == 1);
+		ensure(x.val.array.columns == 1);
+		ensure(x.val.array.lparray[0].xltype == xltypeNum);
+		ensure(x.val.array.lparray[0].val.num == 1);
+
+		x = item(o, 3);
+		ensure(x.xltype == xltypeMulti);
+		ensure(x.val.array.rows == 1);
+		ensure(x.val.array.columns == 1);
+		ensure(x.val.array.lparray[0].xltype == xltypeNum);
+		ensure(x.val.array.lparray[0].val.num == 4);
+
+		o.resize(1, o.size());
+		x = item(o, 0);
+		ensure(x.xltype == xltypeMulti);
+		ensure(x.val.array.rows == 1);
+		ensure(x.val.array.columns == 1);
+		ensure(x.val.array.lparray[0].xltype == xltypeNum);
+		ensure(x.val.array.lparray[0].val.num == 1);
+
+		x = item(o, 3);
+		ensure(x.xltype == xltypeMulti);
+		ensure(x.val.array.rows == 1);
+		ensure(x.val.array.columns == 1);
+		ensure(x.val.array.lparray[0].xltype == xltypeNum);
+		ensure(x.val.array.lparray[0].val.num == 4);
+
+		o.resize(2, o.size()/2);
+		x = item(o, 0);
+		ensure(x.xltype == xltypeMulti);
+		ensure(x.val.array.rows == 1);
+		ensure(x.val.array.columns == 2);
+		ensure(x.val.array.lparray[0].xltype == xltypeNum);
+		ensure(x.val.array.lparray[0].val.num == 1);
+
+		x = item(o, 1);
+		ensure(x.xltype == xltypeMulti);
+		ensure(x.val.array.rows == 1);
+		ensure(x.val.array.columns == 2);
+		ensure(x.val.array.lparray[1].xltype == xltypeNum);
+		ensure(x.val.array.lparray[1].val.num == 4);
+	}
+	catch (const std::exception& ex) {
+		XLL_ERROR(ex.what());
+
+		return FALSE;
+	}
+
+	return TRUE;
+}
+Auto<OpenAfter> xaoa_test_item(test_item);
+#endif // _DEBUG
 
 AddIn xai_range_set(
 	Function(XLL_HANDLEX, "xll_range_set_", "\\RANGE")
@@ -108,12 +171,8 @@ LPOPER WINAPI xll_range_fold(double m, LPOPER pr)
 
 	try {
 		OPER M(m);
-		// row to column
-		if (rows(*pr) == 1) {
-			std::swap(pr->val.array.rows, pr->val.array.columns);
-		}
 		o = item(*pr, 0);
-		for (unsigned i = 1; i < rows(*pr); ++i) {
+		for (unsigned i = 1; i < items(*pr); ++i) {
 			o = Excel(xlUDF, M, o, item(*pr, i));
 		}
 	}
@@ -135,7 +194,7 @@ AddIn xai_range_scan(
 		.Category(CATEGORY)
 	.FunctionHelp("Return the right scan of range using monoid.")
 	.Documentation(R"(
-Accumulate elements of <code>range</code> using <code>monoid</code>.
+Scan elements of <code>range</code> using <code>monoid</code>.
 If <code>range</code> has more than one row and more than one column
 then return scan applied to each column.
 )")
@@ -145,19 +204,13 @@ LPOPER WINAPI xll_range_scan(double m, LPOPER pr)
 #pragma XLLEXPORT
 	static OPER o;
 	try {
+		o.resize(rows(*pr), columns(*pr));
 		OPER M(m);
-		// row to column
-		if (rows(*pr) == 1) {
-			std::swap(pr->val.array.rows, pr->val.array.columns);
-		}
-		o = item(*pr, 0);
-		XLOPERX o0 = item(o, 0);
-		for (unsigned i = 1; i < rows(*pr); ++i) {
+		OPER o0 = item(*pr, 0);
+		std::copy(o0.begin(), o0.end(), begin(o));
+		for (unsigned i = 1; i < items(*pr); ++i) {
 			o0 = Excel(xlUDF, M, o0, item(*pr, i));
-			o.push_back(o0);
-		}
-		if (columns(*pr) == 1) {
-			o.resize(1, o.size());
+			std::copy(o0.begin(), o0.end(), o.begin() + item_index(o, i));
 		}
 	}
 	catch (const std::exception& ex) {
@@ -217,40 +270,19 @@ Sum or concatenate monoid for ranges.
 LPOPER WINAPI xll_range_sum(const LPOPER pr, const LPOPER p_r)
 {
 #pragma XLLEXPORT
-	static OPER r;
+	static OPER r; // !!! return pr ???
 
 	try {
 		if (p_r->is_missing()) {
 			r.resize(rows(*pr), columns(*pr));
 			for (unsigned i = 0; i < size(*pr); ++i) {
-				switch ((*pr)[i].type()) {
-				case xltypeNum:
-					r[i] = 0;
-					break;
-				case xltypeStr:
-				case xltypeNil:
-					r[i] = "";
-					break;
-				case xltypeBool:
-					r[i] = false;
-					break;
-				default:
-					r[i] = 0;
-				}
+				r[i] = 0;
 			}
 		}
 		else {
 			r = *pr;
 			for (unsigned i = 0; i < size(*pr); ++i) {
-				if (r[i].is_num()) {
-					r[i] = r[i].as_num() + (*p_r)[i].as_num();
-				}
-				else if (r[i].is_bool()) {
-					r[i] = Excel(xlfOr, r[i], (*p_r)[i]);
-				}
-				else {
-					r[i] = Excel(xlfConcatenate, r[i], (*p_r)[i]);
-				}
+				r[i] = r[i].as_num() + (*p_r)[i].as_num();
 			}
 		}
 	}
