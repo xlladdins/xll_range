@@ -358,6 +358,56 @@ LPOPER WINAPI xll_range_take(LONG n, const LPOPER pr)
 	return &o;
 }
 
+inline XLOPERX range_drop(XLOPERX x, long i)
+{
+	if (i > 0) {
+		unsigned n = i;
+		n = std::min(n, items(x));
+		if (rows(x) > 1) {
+			x.val.array.lparray += n * columns(x);
+			x.val.array.rows -= n;
+		}
+		else {
+			x.val.array.lparray += n;
+			x.val.array.columns -= n;
+		}
+	}
+	else if (i < 0) {
+		unsigned n = -i;
+		n = std::min(n, items(x));
+		if (rows(x) > 1) {
+			x.val.array.rows = rows(x) - n;
+		}
+		else {
+			x.val.array.columns = columns(x) - n;
+		}
+	}
+
+	return x;
+}
+
+AddIn xai_range_drop(
+	Function(XLL_LPOPER, "xll_range_drop", "RANGE.DROP")
+	.Arguments({
+		Arg(XLL_LONG, "count", "is the number of items to drop."),
+		Arg(XLL_LPOPER, "range", "is the range to drop items from.")
+		})
+	.FunctionHelp("Drop count items from beginning (count > 0) or end (count < 0) of range.")
+	.Category(CATEGORY)
+	.Documentation(R"xyzyx(
+Drop <code>count</code> items from <code>range</code>.
+)xyzyx")
+);
+LPOPER WINAPI xll_range_drop(LONG n, const LPOPER pr)
+{
+#pragma XLLEXPORT
+	static OPER o;
+
+	o = range_drop(*pr, n);
+
+	return &o;
+}
+
 #if 0
 #ifdef _DEBUG
 
