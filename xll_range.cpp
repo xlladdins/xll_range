@@ -242,13 +242,22 @@ LPOPER WINAPI xll_range_max(const LPOPER pr, const LPOPER p_r)
 	if (p_r->is_missing()) {
 		r.resize(rows(*pr), columns(*pr));
 		for (unsigned i = 0; i < size(*pr); ++i) {
-			r[i] = -std::numeric_limits<double>::infinity();
+			switch (type((*pr)[i])) {
+			case xltypeNum:
+				r[i] = -std::numeric_limits<double>::infinity();
+				break;
+			case xltypeStr:
+				r[i] = OPER{};
+				break;
+			default:
+				r[i] = OPER{};
+			}
 		}
 	}
 	else {
 		r = *pr;
 		for (unsigned i = 0; i < size(*pr); ++i) {
-			r[i] = std::max(r[i].as_num(), (*p_r)[i].as_num());
+			r[i] = std::max(r[i], (*p_r)[i]);
 		}
 	}
 
