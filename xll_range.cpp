@@ -145,7 +145,7 @@ LPOPER WINAPI xll_range_get(HANDLEX h)
 	handle<OPER> h_(h);
 
 	if (!h_) {
-		XLL_ERROR("RANGE.GET: unknown handle");
+		XLL_ERROR(__FUNCTION__ ": unknown handle");
 
 		return nullptr;
 	}
@@ -404,6 +404,61 @@ LPOPER WINAPI xll_range_drop(LONG n, const LPOPER pr)
 	static OPER o;
 
 	o = range_drop(*pr, n);
+
+	return &o;
+}
+
+inline auto flatten(XLOPERX& x)
+{
+	if (x.xltype & xltypeMulti) {
+		x.val.array.columns = size(x);
+		x.val.array.rows = 1;
+	}
+
+	return x;
+}
+
+AddIn xai_range_flatten(
+	Function(XLL_LPOPER, "xll_range_flatten", "RANGE.FLATTEN")
+	.Arguments({
+		Arg(XLL_LPOPER, "range", "is a range or a handle to a range to be flattened."),
+		Arg(XLL_LPOPER, "_range2", "is a optional range or a handle to a range."),
+		})
+	.FunctionHelp("Return the flattened ranges or handle.")
+	.Category(CATEGORY)
+);
+LPOPER WINAPI xll_range_flatten(const LPOPER pr, LPOPER pr2)
+{
+#pragma XLLEXPORT
+	static OPER o;
+
+	try {
+		o = ErrNA;
+		if (pr->is_num()) {
+			handle<OPER> h(pr->as_num());
+			flatten(*h.ptr());
+			o = *pr;
+		}
+		else {
+			o.resize(size(*pr), 1);
+			std::copy(begin(*pr), end(*pr), begin(o));
+		}
+		if (!pr2->is_missing()) {
+			XLOPERX x = *pr2;
+			if (pr2->is_num()) {
+				handle<OPER> h(pr2->as_num());
+				if (h) {
+					x = flatten(*h.ptr());
+				}
+			}
+			o.push_bottom(x);
+		}
+	}
+	catch (const std::exception& ex) {
+		XLL_ERROR(ex.what());
+
+		o = ErrNA;
+	}
 
 	return &o;
 }
