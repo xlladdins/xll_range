@@ -180,12 +180,16 @@
     <ClCompile Include="xll_range.cpp" />
   </ItemGroup>
   <ItemGroup>
+    <None Include="README.md" />
     <None Include="setup.bat" />
   </ItemGroup>
   <ItemGroup>
-    <ProjectReference Include="xll\xll.vcxproj">
-      <Project>{367249bb-b8a3-4671-b095-a5db904dbd6d}</Project>
+    <ProjectReference Include="xll24\xll.vcxproj">
+      <Project>{7d7375af-e7e3-42d3-a00f-d8ee22c39924}</Project>
     </ProjectReference>
+  </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="xll_range.h" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

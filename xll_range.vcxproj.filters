@@ -21,5 +21,11 @@
   </ItemGroup>
   <ItemGroup>
     <None Include="setup.bat" />
+    <None Include="README.md" />
+  </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="xll_range.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
   </ItemGroup>
 </Project>

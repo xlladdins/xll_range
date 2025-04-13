@@ -1,37 +1,68 @@
 // xll_range.cpp - two-dimensional range of cells
 // ??? Can range.scan(monoid, range.get(h)) act on underlying handle ???
-#include "xll/xll/xll.h"
-
-#ifndef CATEGORY
-#define CATEGORY "Range"
-#endif
+#include "xll_range.h"
 
 using namespace xll;
 
-// pointer to underlying range
-inline LPOPER ptr(LPOPER po)
+AddIn xai_range_set_(
+	Function(XLL_HANDLEX, "xll_range_set__", "\\RANGE")
+	.Arguments({
+		Arg(XLL_LPOPER, "range", "is the range to set.", "{1,2;3,4}")
+		})
+	.Uncalced()
+	.FunctionHelp("Return a handle to a range.")
+	.Category(CATEGORY)
+	.Documentation(R"(
+Create a handle to a two dimensional range of cells.
+)")
+);
+HANDLEX WINAPI xll_range_set__(LPOPER px)
 {
-	if (po->size() == 1 and (*po)[0].is_num()) {
-		handle<OPER> h(po->as_num());
-		if (h) {
-			po = h.ptr();
-		}
-	}
+#pragma XLLEXPORT
+	handle<OPER> h(new OPER(*px));
 
-	return po;
+	return h.get();
 }
 
+AddIn xai_range_get_(
+	Function(XLL_LPOPER, "xll_range_get_", "RANGE.GET")
+	.Arguments({
+		Arg(XLL_HANDLEX, "handle", "is a handle returned by RANGE.SET.", "\\RANGE.SET({0,1;2,3})")
+		})
+	.FunctionHelp("Return the range held by a handle.")
+	.Category(CATEGORY)
+	.Documentation(R"(
+Return a two dimensional range of cells.
+)")
+);
+LPOPER WINAPI xll_range_get_(HANDLEX h)
+{
+#pragma XLLEXPORT
+	handle<OPER> h_(h);
+
+	if (!h_) {
+		XLL_ERROR(__FUNCTION__ ": unknown handle");
+
+		return nullptr;
+	}
+
+	return h_.ptr();
+}
+
+
+#if 0
+
 // size of row or column, or number of rows of 2-d range
-inline unsigned items(const XLOPERX& x)
+inline unsigned items(const XLOPER12& x)
 {
 	return rows(x) > 1 ? rows(x) : columns(x);
 }
-inline unsigned item_index(const XLOPERX& x, unsigned i)
+inline unsigned item_index(const XLOPER12& x, unsigned i)
 {
 	return xmod(i * (rows(x) > 1 ? columns(x) : 1), size(x));
 }
 // i-th element or i-th row
-inline XLOPERX item(XLOPERX x, unsigned i)
+inline XLOPER12 item(XLOPER12 x, unsigned i)
 {
 	if (x.xltype & xltypeMulti) {
 		x.val.array.lparray = &index(x, item_index(x, i));
@@ -50,7 +81,7 @@ inline XLOPERX item(XLOPERX x, unsigned i)
 int test_item()
 {
 	OPER o({ OPER(1), OPER(2), OPER(3), OPER(4) });
-	XLOPERX x;
+	XLOPER12 x;
 	try {
 		o.resize(o.size(), 1);
 		x = item(o, 0);
@@ -107,52 +138,6 @@ int test_item()
 }
 Auto<OpenAfter> xaoa_test_item(test_item);
 #endif // _DEBUG
-
-AddIn xai_range_set(
-	Function(XLL_HANDLEX, "xll_range_set_", "\\RANGE")
-	.Arguments({
-		Arg(XLL_LPOPER, "range", "is the range to set.", "{1,2;3,4}")
-		})
-	.Uncalced()
-	.FunctionHelp("Return a handle to a range.")
-	.Category(CATEGORY)
-	.Documentation(R"(
-Create a handle to a two dimensional range of cells.
-)")
-);
-HANDLEX WINAPI xll_range_set_(LPOPER px)
-{
-#pragma XLLEXPORT
-	handle<OPER> h(new OPER(*px));
-
-	return h.get();
-}
-
-AddIn xai_range_get(
-	Function(XLL_LPOPER, "xll_range_get", "RANGE.GET")
-	.Arguments({
-		Arg(XLL_HANDLEX, "handle", "is a handle returned by RANGE.SET.", "\\RANGE.SET({0,1;2,3})")
-		})
-	.FunctionHelp("Return the range held by a handle.")
-	.Category(CATEGORY)
-	.Documentation(R"(
-Return a two dimensional range of cells.
-)")
-);
-LPOPER WINAPI xll_range_get(HANDLEX h)
-{
-#pragma XLLEXPORT
-	handle<OPER> h_(h);
-
-	if (!h_) {
-		XLL_ERROR(__FUNCTION__ ": unknown handle");
-
-		return nullptr;
-	}
-
-	return h_.ptr();
-}
-
 AddIn xai_range_fold(
 	Function(XLL_LPOPER, "xll_range_fold", "RANGE.FOLD")
 	.Arguments({
@@ -307,7 +292,7 @@ LPOPER WINAPI xll_range_sum(const LPOPER pr, const LPOPER p_r)
 	return &r;
 }
 
-inline XLOPERX range_take(XLOPERX x, long i)
+inline XLOPER12 range_take(XLOPER12 x, long i)
 {
 	if (i > 0) {
 		unsigned n = i;
@@ -358,7 +343,7 @@ LPOPER WINAPI xll_range_take(LONG n, const LPOPER pr)
 	return &o;
 }
 
-inline XLOPERX range_drop(XLOPERX x, long i)
+inline XLOPER12 range_drop(XLOPER12 x, long i)
 {
 	if (i > 0) {
 		unsigned n = i;
@@ -408,7 +393,7 @@ LPOPER WINAPI xll_range_drop(LONG n, const LPOPER pr)
 	return &o;
 }
 
-inline auto flatten(XLOPERX& x)
+inline auto flatten(XLOPER12& x)
 {
 	if (x.xltype & xltypeMulti) {
 		x.val.array.columns = size(x);
@@ -444,7 +429,7 @@ LPOPER WINAPI xll_range_flatten(const LPOPER pr, LPOPER pr2)
 			std::copy(begin(*pr), end(*pr), begin(o));
 		}
 		if (!pr2->is_missing()) {
-			XLOPERX x = *pr2;
+			XLOPER12 x = *pr2;
 			if (pr2->is_num()) {
 				handle<OPER> h(pr2->as_num());
 				if (h) {
@@ -487,4 +472,6 @@ int xll_test_range()
 Auto<OpenAfter> xaoa_test_range([]() { return xll_test_range(); });
 
 #endif // _DEBUG
+#endif // 0
+
 #endif // 0
